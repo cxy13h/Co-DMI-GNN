@@ -18,7 +18,7 @@ def init_seed(seed=None):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='Tmall', help='Tmall/retailrocket/lastfm')
+parser.add_argument('--dataset', default='RetailRocket', help='Tmall/RetailRocket/lastfm')
 parser.add_argument('--hiddenSize', type=int, default=100)
 parser.add_argument('--epoch', type=int, default=30)
 parser.add_argument('--activate', type=str, default='relu')
@@ -71,7 +71,7 @@ def main(seed=None):
         opt.beta = 0.02
         opt.interests = 5
         opt.length = 8
-    elif opt.dataset == 'retailrocket':
+    elif opt.dataset == 'RetailRocket':
         num_node = 36969
         opt.n_iter = 1
         opt.dropout_global = 0.5
@@ -146,4 +146,5 @@ def main(seed=None):
 
 
 if __name__ == '__main__':
-    main()
+    for _ in range(5):
+        main()
