@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 from tqdm import tqdm
-from aggregator import LocalAggregator, GlobalAggregator
+from aggregator import LocalAggregator
 from torch.nn import Module
 import torch.nn.functional as F
 
@@ -13,31 +13,20 @@ class DMIGNN(Module):
     def __init__(self, opt, num_node, adj_all, num):
         super(DMIGNN, self).__init__()
         self.opt = opt
-
+        self.device = opt.device
         self.batch_size = opt.batch_size
         self.num_node = num_node
         self.dim = opt.hiddenSize
         self.dropout_local = opt.dropout_local
-        self.dropout_global = opt.dropout_global
-        self.hop = opt.n_iter
-        self.sample_num = opt.n_sample
         self.interests = opt.interests
         self.length = opt.length
         self.beta = opt.beta
 
-        self.adj_all = trans_to_cuda(torch.Tensor(adj_all)).long()
-        self.num = trans_to_cuda(torch.Tensor(num)).float()
+        self.adj_all = trans_to_cuda(torch.Tensor(adj_all), self.device).long()
+        self.num = trans_to_cuda(torch.Tensor(num), self.device).float()
 
         # Aggregator
         self.local_agg = LocalAggregator(self.dim, self.opt.alpha, dropout=0.0)
-        self.global_agg = []
-        for i in range(self.hop):
-            if opt.activate == 'relu':
-                agg = GlobalAggregator(self.dim, opt.dropout_gcn, act=torch.relu)
-            else:
-                agg = GlobalAggregator(self.dim, opt.dropout_gcn, act=torch.tanh)
-            self.add_module('agg_gcn_{}'.format(i), agg)
-            self.global_agg.append(agg)
 
         # Item representation & Position representation
         self.embedding = nn.Embedding(num_node, self.dim)
@@ -112,13 +101,13 @@ class DMIGNN(Module):
         dimensions = list(range(self.interests))
 
         # 对于每个维度，进行归一化
-        normalized_beta = torch.empty_like(beta).to('cuda')
+        normalized_beta = torch.empty_like(beta).to(self.device)
         for i in dimensions:
             normalized_beta[:, :, i] = F.normalize(beta[:, :, i], p=2, dim=1)
 
         lens = sumask[:, 0] - self.length
 
-        sim_loss = torch.zeros(nh.shape[0], dtype=torch.float32).to('cuda')
+        sim_loss = torch.zeros(nh.shape[0], dtype=torch.float32).to(self.device)
         for i in dimensions[:-1]:
             for j in dimensions[i + 1:]:
                 temp_sim = torch.sum(normalized_beta[:, :, i] * normalized_beta[:, :, j], dim=1)
@@ -145,66 +134,22 @@ class DMIGNN(Module):
         return max_scores, loss1 * self.beta, sum_scores
 
     def forward(self, inputs, adj, mask_item, item):
-        batch_size = inputs.shape[0]
-        seqs_len = inputs.shape[1]
         h = self.embedding(inputs)
         # added
         h = F.normalize(h, p=2.0, dim=-1)
         # local
         h_local = self.local_agg(h, adj, mask_item)
 
-        # global
-        item_neighbors = [inputs]
-        weight_neighbors = []
-        support_size = seqs_len
-
-        for i in range(1, self.hop + 1):
-            item_sample_i, weight_sample_i = self.sample(item_neighbors[-1], self.sample_num)
-            support_size *= self.sample_num
-            item_neighbors.append(item_sample_i.view(batch_size, support_size))
-            weight_neighbors.append(weight_sample_i.view(batch_size, support_size))
-
-        entity_vectors = [self.embedding(i) for i in item_neighbors]
-        weight_vectors = weight_neighbors
-
-        session_info = []
-        item_emb = self.embedding(item) * mask_item.float().unsqueeze(-1)
-
-        # mean 
-        sum_item_emb = torch.sum(item_emb, 1) / torch.sum(mask_item.float(), -1).unsqueeze(-1)
-
-        # sum
-        sum_item_emb = sum_item_emb.unsqueeze(-2)
-        for i in range(self.hop):
-            session_info.append(sum_item_emb.repeat(1, entity_vectors[i].shape[1], 1))
-
-        for n_hop in range(self.hop):
-            entity_vectors_next_iter = []
-            shape = [batch_size, -1, self.sample_num, self.dim]
-            for hop in range(self.hop - n_hop):
-                aggregator = self.global_agg[n_hop]
-                vector = aggregator(self_vectors=entity_vectors[hop],
-                                    neighbor_vector=entity_vectors[hop + 1].view(shape),
-                                    masks=None,
-                                    batch_size=batch_size,
-                                    neighbor_weight=weight_vectors[hop].view(batch_size, -1, self.sample_num),
-                                    extra_vector=session_info[hop])
-                entity_vectors_next_iter.append(vector)
-            entity_vectors = entity_vectors_next_iter
-
-        h_global = entity_vectors[0].view(batch_size, seqs_len, self.dim)
-
         # combine
         h_local = F.dropout(h_local, self.dropout_local, training=self.training)
-        h_global = F.dropout(h_global, self.dropout_global, training=self.training)
-        output = h_local + h_global
+        output = h_local
 
         return output
 
 
-def trans_to_cuda(variable):
+def trans_to_cuda(variable, device):
     if torch.cuda.is_available():
-        return variable.cuda()
+        return variable.cuda(device)
     else:
         return variable
 
@@ -216,20 +161,20 @@ def trans_to_cpu(variable):
         return variable
 
 
-def forward(model, data):
+def forward(model, data, device):
     alias_inputs, adj, items, mask, targets, inputs = data
-    alias_inputs = trans_to_cuda(alias_inputs).long()
-    items = trans_to_cuda(items).long()
-    adj = trans_to_cuda(adj).float()
-    mask = trans_to_cuda(mask).long()
-    inputs = trans_to_cuda(inputs).long()
+    alias_inputs = trans_to_cuda(alias_inputs, device).long()
+    items = trans_to_cuda(items, device).long()
+    adj = trans_to_cuda(adj, device).float()
+    mask = trans_to_cuda(mask, device).long()
+    inputs = trans_to_cuda(inputs, device).long()
     hidden = model(items, adj, mask, inputs)
     get = lambda index: hidden[index][alias_inputs[index]]
     seq_hidden = torch.stack([get(i) for i in torch.arange(len(alias_inputs)).long()])
     return targets, model.compute_scores(seq_hidden, mask)
 
 
-def train_test(model, train_data, test_data):
+def train_test(model, train_data, test_data, device):
     print('start training: ', datetime.datetime.now())
     model.train()
     total_loss = 0.0
@@ -237,8 +182,8 @@ def train_test(model, train_data, test_data):
                                                shuffle=True, pin_memory=True)
     for data in tqdm(train_loader):
         model.optimizer.zero_grad()
-        targets, (scores, loss1, _) = forward(model, data)
-        targets = trans_to_cuda(targets).long()
+        targets, (scores, loss1, _) = forward(model, data, device)
+        targets = trans_to_cuda(targets, device).long()
         loss = model.loss_function(scores, targets - 1) + loss1
         loss.backward()
         model.optimizer.step()
@@ -254,7 +199,7 @@ def train_test(model, train_data, test_data):
     hit, mrr = [], []
     cov = set()
     for data in test_loader:
-        targets, (scores, _, sum_scores) = forward(model, data)
+        targets, (scores, _, sum_scores) = forward(model, data, device)
         sub_scores = scores.topk(20)[1]
         sub_scores = trans_to_cpu(sub_scores).detach().numpy()
         targets = targets.numpy()

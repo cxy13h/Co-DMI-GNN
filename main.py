@@ -18,7 +18,9 @@ def init_seed(seed=None):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='RetailRocket', help='Tmall/RetailRocket/lastfm')
+parser.add_argument('--dataset', default='Tmall', help='Tmall/RetailRocket/lastfm')
+parser.add_argument('--device', default='cuda:1', help='cuda:0/cuda:1')
+parser.add_argument('--ablation', default='without_global', type=str, help='origin/without_global/without_local')
 parser.add_argument('--hiddenSize', type=int, default=100)
 parser.add_argument('--epoch', type=int, default=30)
 parser.add_argument('--activate', type=str, default='relu')
@@ -50,7 +52,9 @@ def main(seed=None):
     result_dir = os.path.join("result", opt.dataset)
     if not os.path.exists(result_dir):
         os.makedirs(result_dir)
-        
+    result_dir = os.path.join(result_dir, opt.ablation)
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
     # 创建结果文件
     result_file = os.path.join(result_dir, str(seed) + ".txt")
     log_file = open(result_file, "w")
@@ -105,7 +109,7 @@ def main(seed=None):
     test_data = Data(test_data)
 
     adj, num = handle_adj(adj, num_node, opt.n_sample_all, num)
-    model = trans_to_cuda(DMIGNN(opt, num_node, adj, num))
+    model = trans_to_cuda(DMIGNN(opt, num_node, adj, num), opt.device)
 
     print(opt)
     start = time.time()
@@ -116,7 +120,7 @@ def main(seed=None):
     for epoch in range(opt.epoch):
         log('-------------------------------------------------------')
         log('epoch: '+ str(epoch))
-        hit, mrr, cov = train_test(model, train_data, test_data)
+        hit, mrr, cov = train_test(model, train_data, test_data, opt.device)
         cov = cov * 100 / (num_node - 1)
         flag = 0
         if hit >= best_result[0]:
