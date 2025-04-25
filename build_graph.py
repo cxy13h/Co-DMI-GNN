@@ -2,7 +2,7 @@ import pickle
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='lastfm', help='Tmall/retailrocket/lastfm')
+parser.add_argument('--dataset', default='Nowplaying', help='Tmall/RetailRocket/lastfm/diginetica/Nowplaying')
 parser.add_argument('--sample_num', type=int, default=12)
 opt = parser.parse_args()
 
@@ -17,6 +17,10 @@ elif opt.dataset == 'retailrocket':
     num = 36969
 elif opt.dataset == 'lastfm':
     num = 38616
+elif opt.dataset == 'diginetica':
+    num = 43098
+elif opt.dataset == 'Nowplaying':
+    num = 60417
 else:
     raise Exception('Unknown Dataset!')
 
