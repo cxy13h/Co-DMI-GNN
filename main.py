@@ -18,8 +18,8 @@ def init_seed(seed=None):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='RetailRocket', help='Tmall/RetailRocket/lastfm')
-parser.add_argument('--device', default='cuda:0', help='cuda:0/cuda:1')
+parser.add_argument('--dataset', default='Tmall', help='Tmall/RetailRocket/lastfm/Nowplaying/diginetica')
+parser.add_argument('--device', default='cuda:1', help='cuda:0/cuda:1')
 parser.add_argument('--ablation', default='without_global', type=str, help='origin/without_global/without_local')
 parser.add_argument('--hiddenSize', type=int, default=100)
 parser.add_argument('--epoch', type=int, default=30)
@@ -75,6 +75,15 @@ def main(seed=None):
         opt.beta = 0.02
         opt.interests = 5
         opt.length = 8
+    elif opt.dataset == 'diginetica':
+        num_node = 43098
+        opt.n_iter = 1
+        opt.dropout_global = 1
+        opt.dropout_gcn = 1
+        opt.dropout_local = 0.7
+        opt.beta = 0.02
+        opt.interests = 5
+        opt.length = 8
     elif opt.dataset == 'RetailRocket':
         num_node = 36969
         opt.n_iter = 1
@@ -86,6 +95,15 @@ def main(seed=None):
         opt.length = 12
     elif opt.dataset == 'lastfm':
         num_node = 38616
+        opt.n_iter = 1
+        opt.dropout_global = 0.1
+        opt.dropout_gcn = 0
+        opt.dropout_local = 0
+        opt.length = 18
+        opt.beta = 0.005
+        opt.interests = 5
+    elif opt.dataset == 'Nowplaying':
+        num_node = 60417
         opt.n_iter = 1
         opt.dropout_global = 0.1
         opt.dropout_gcn = 0
