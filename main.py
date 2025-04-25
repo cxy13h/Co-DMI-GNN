@@ -18,8 +18,8 @@ def init_seed(seed=None):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', default='Tmall', help='Tmall/RetailRocket/lastfm')
-parser.add_argument('--device', default='cuda:1', help='cuda:0/cuda:1')
+parser.add_argument('--dataset', default='RetailRocket', help='Tmall/RetailRocket/lastfm')
+parser.add_argument('--device', default='cuda:0', help='cuda:0/cuda:1')
 parser.add_argument('--ablation', default='without_global', type=str, help='origin/without_global/without_local')
 parser.add_argument('--hiddenSize', type=int, default=100)
 parser.add_argument('--epoch', type=int, default=30)
@@ -150,5 +150,5 @@ def main(seed=None):
 
 
 if __name__ == '__main__':
-    for _ in range(5):
+    for _ in range(50):
         main()
